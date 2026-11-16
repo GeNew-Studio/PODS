@@ -1,9 +1,5 @@
-"use server";
+// Client-side actions for the static build. Each one returns the page to open next.
 
-import fs from "fs";
-import path from "path";
-import { revalidatePath } from "next/cache";
-import { redirect, unstable_rethrow } from "next/navigation";
 import { MEDICINES } from "@/lib/constants";
 import {
   asAlcohol,
@@ -23,10 +19,10 @@ import {
   restoreSample,
   saveDocument,
   saveDonor as writeDonor,
+  saveFile,
   saveMatch,
   saveRecipient as writeRecipient,
 } from "@/lib/db";
-import { uploadsDir } from "@/lib/documents";
 import { antigenList, round1 } from "@/lib/format";
 import { getOrgan, isOrganId } from "@/lib/organs/registry";
 import { matchCanStart } from "@/lib/scoring/gates";
@@ -67,10 +63,6 @@ function readProfile(formData: FormData, fields: FieldDef[]): Profile {
     else profile[field.key] = String(raw ?? "");
   }
   return profile;
-}
-
-function refresh() {
-  revalidatePath("/", "layout");
 }
 
 export async function saveDonor(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -119,10 +111,8 @@ export async function saveDonor(_state: ActionState, formData: FormData): Promis
     if (!donor.hospital) return { error: "Donor hospital is required." };
     if (!donor.causeOfDeath) return { error: "Cause of death is required." };
     await writeDonor(donor);
-    refresh();
-    redirect(`/donors/${donor.id}`);
+    return { redirectTo: `/donors/view?id=${donor.id}` };
   } catch (error) {
-    unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not save the donor." };
   }
 }
@@ -159,20 +149,18 @@ export async function saveRecipient(_state: ActionState, formData: FormData): Pr
     if (!recipient.name) return { error: "Name is required." };
     if (!recipient.clinicalBackground) return { error: "Clinical background is required." };
     await writeRecipient(recipient);
-    refresh();
-    redirect("/waitlist");
+    return { redirectTo: "/waitlist" };
   } catch (error) {
-    unstable_rethrow(error);
     return { error: error instanceof Error ? error.message : "Could not save the patient." };
   }
 }
 
-export async function runMatch(formData: FormData) {
+export async function runMatch(formData: FormData): Promise<string> {
   const donorId = text(formData, "donorId");
   const donor = await getDonor(donorId);
-  if (!donor) redirect("/donors");
+  if (!donor) return "/donors";
   const cannot = matchCanStart(donor);
-  if (cannot || !isOrganId(donor.organ)) redirect(`/donors/${donorId}`);
+  if (cannot || !isOrganId(donor.organ)) return `/donors/view?id=${donorId}`;
   const organModule = getOrgan(donor.organ);
   const recipients = (await listRecipients(donor.organ)).filter((item) => item.active);
   const quality = organModule.quality(donor);
@@ -212,16 +200,15 @@ export async function runMatch(formData: FormData) {
     decisionNote: "",
   };
   await saveMatch(match);
-  refresh();
-  redirect(`/matches/${match.id}`);
+  return `/matches/view?id=${match.id}`;
 }
 
-export async function saveDecision(formData: FormData) {
+export async function saveDecision(formData: FormData): Promise<string> {
   const id = text(formData, "matchId");
   const match = await getMatch(id);
-  if (!match) redirect("/history");
+  if (!match) return "/history";
   const recipientId = text(formData, "recipientId");
-  if (!match.eligible.some((row) => row.recipientId === recipientId)) redirect(`/matches/${id}`);
+  if (!match.eligible.some((row) => row.recipientId === recipientId)) return `/matches/view?id=${id}`;
   const decision = asDecision(text(formData, "status"));
   const note = text(formData, "note").slice(0, 500);
   if (match.decisionStatus === "accepted" && match.offeredRecipientId) {
@@ -241,8 +228,7 @@ export async function saveDecision(formData: FormData) {
     const recipient = await getRecipient(recipientId);
     if (recipient) await writeRecipient({ ...recipient, active: false });
   }
-  refresh();
-  redirect(`/matches/${id}`);
+  return `/matches/view?id=${id}`;
 }
 
 function toRankedRow(recipient: Recipient, result: ScoreResult): RankedRow {
@@ -263,17 +249,17 @@ function toRankedRow(recipient: Recipient, result: ScoreResult): RankedRow {
   };
 }
 
-export async function openConsent(formData: FormData) {
+export async function openConsent(formData: FormData): Promise<string> {
   const matchId = text(formData, "matchId");
   const recipientId = text(formData, "recipientId");
   const match = await getMatch(matchId);
   const recipient = await getRecipient(recipientId);
   const donor = match ? await getDonor(match.donorId) : null;
-  if (!match || !recipient || !donor) redirect("/history");
+  if (!match || !recipient || !donor) return "/history";
   const row = match.eligible.find((item) => item.recipientId === recipientId);
-  if (!row) redirect(`/matches/${matchId}`);
+  if (!row) return `/matches/view?id=${matchId}`;
   const existing = await findRecipientConsent(matchId, recipientId);
-  if (existing) redirect(`/documents/${existing.id}`);
+  if (existing) return `/documents/view?id=${existing.id}`;
   const document: ClinicalDocument = {
     id: crypto.randomUUID(),
     kind: "recipient_consent",
@@ -295,31 +281,27 @@ export async function openConsent(formData: FormData) {
     signedStoredName: null,
   };
   await saveDocument(document);
-  refresh();
-  redirect(`/documents/${document.id}`);
+  return `/documents/view?id=${document.id}`;
 }
 
-export async function attachSigned(formData: FormData) {
+export async function attachSigned(formData: FormData): Promise<string> {
   const id = text(formData, "documentId");
   const document = await getDocument(id);
-  if (!document) redirect("/documents");
+  if (!document) return "/documents";
   const file = formData.get("signed");
-  if (!(file instanceof File) || file.size === 0) redirect(`/documents/${id}`);
+  if (!(file instanceof File) || file.size === 0) return `/documents/view?id=${id}`;
   const allowed = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp"]);
-  if (!allowed.has(file.type)) redirect(`/documents/${id}`);
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  if (!allowed.has(file.type)) return `/documents/view?id=${id}`;
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 80) || "signed-copy";
   const storedName = `${id}-${safeName}`;
-  fs.writeFileSync(path.join(uploadsDir, storedName), Buffer.from(await file.arrayBuffer()));
+  await saveFile(storedName, file);
   document.signedFileName = file.name;
   document.signedStoredName = storedName;
   await saveDocument(document);
-  refresh();
-  redirect(`/documents/${id}`);
+  return `/documents/view?id=${id}`;
 }
 
-export async function restoreSampleData() {
+export async function restoreSampleData(): Promise<string> {
   await restoreSample();
-  refresh();
-  redirect("/");
+  return "/";
 }

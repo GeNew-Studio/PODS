@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { ClockBadge, Facts, PageIntro, Panel } from "@/components/ui";
+import { ClockBadge, Facts, Missing, PageIntro, Panel } from "@/components/ui";
 import { runMatch } from "@/lib/actions";
+import { useData, useNavigateAction } from "@/lib/client";
 import { LISTING_CENTRE, IMPLANT_HOSPITAL } from "@/lib/constants";
 import { getDonor, listDonorDocuments } from "@/lib/db";
 import { documentKindLabel } from "@/lib/documents";
@@ -10,23 +13,28 @@ import { bmi } from "@/lib/format";
 import { getOrgan } from "@/lib/organs/registry";
 import { matchCanStart } from "@/lib/scoring/gates";
 
-export default function DonorPage({ params }: { params: Promise<{ id: string }> }) {
+export default function DonorPage() {
   return (
     <Suspense fallback={<p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading donor…</p>}>
-      <DonorDetail params={params} />
+      <DonorDetail />
     </Suspense>
   );
 }
 
-async function DonorDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const donor = await getDonor(id);
-  if (!donor) notFound();
+function DonorDetail() {
+  const id = useSearchParams().get("id") ?? "";
+  const runMatchAction = useNavigateAction(runMatch);
+  const data = useData(`donor:${id}`, async () => {
+    const donor = await getDonor(id);
+    return { donor, documents: donor ? await listDonorDocuments(donor.id) : [] };
+  });
+  if (!data) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading donor…</p>;
+  const { donor, documents } = data;
+  if (!donor) return <Missing what="donor" />;
   const organModule = getOrgan(donor.organ);
   const quality = organModule.quality(donor);
   const block = matchCanStart(donor);
   const donorBlock = organModule.donorBlock(donor);
-  const documents = await listDonorDocuments(donor.id);
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <PageIntro
@@ -34,7 +42,7 @@ async function DonorDetail({ params }: { params: Promise<{ id: string }> }) {
         title={donor.name}
         text={`${donor.hospital}, ${donor.cluster}. Listing centre ${LISTING_CENTRE}. Implant site ${IMPLANT_HOSPITAL}.`}
         action={
-          <Link href={`/donors/${donor.id}/edit`} className="rounded border border-[#0c6b66] px-3 py-2 text-sm text-[#0c6b66]">
+          <Link href={`/donors/edit?id=${donor.id}`} className="rounded border border-[#0c6b66] px-3 py-2 text-sm text-[#0c6b66]">
             Edit
           </Link>
         }
@@ -51,11 +59,11 @@ async function DonorDetail({ params }: { params: Promise<{ id: string }> }) {
           {documents.map((document) => (
             <li key={document.id} className="flex flex-wrap items-center gap-3">
               <span>{documentKindLabel(document.kind)}</span>
-              <Link href={`/documents/${document.id}`} className="font-medium text-[#0c6b66] underline">
+              <Link href={`/documents/view?id=${document.id}`} className="font-medium text-[#0c6b66] underline">
                 Click here
               </Link>
               {document.signedStoredName ? (
-                <Link href={`/documents/${document.id}/file`} className="text-[#5c6f6d]">
+                <Link href={`/documents/file?id=${document.id}`} className="text-[#5c6f6d]">
                   Signed copy attached
                 </Link>
               ) : (
@@ -116,7 +124,7 @@ async function DonorDetail({ params }: { params: Promise<{ id: string }> }) {
       ) : null}
       <Panel title="Run match">
         {block ? <p className="mb-3 text-sm text-red-800">{block}</p> : null}
-        <form action={runMatch}>
+        <form action={runMatchAction}>
           <input type="hidden" name="donorId" value={donor.id} />
           <button
             disabled={Boolean(block)}

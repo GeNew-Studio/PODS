@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useActionState, useState, type FormEvent } from "react";
 import { BLOOD_TYPES, CLUSTERS, MEDICINES, PERFUSION_DEVICES } from "@/lib/constants";
 import { bmi } from "@/lib/format";
 import { listOrgans } from "@/lib/organs/registry";
@@ -11,14 +12,31 @@ const organs = listOrgans();
 
 type DonorAction = (state: ActionState, formData: FormData) => Promise<ActionState>;
 
+// Submits through onSubmit instead of the form action prop. React clears a form after an
+// action-prop submit, which reset the controlled Organ select to Heart after a validation error.
+function useSaveAction(action: DonorAction) {
+  const router = useRouter();
+  const [state, dispatch, pending] = useActionState(async (state: ActionState, formData: FormData) => {
+    const result = await action(state, formData);
+    if (result?.redirectTo) router.push(result.redirectTo);
+    return result;
+  }, null);
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => dispatch(formData));
+  };
+  return [state, onSubmit, pending] as const;
+}
+
 export function DonorForm({ action, donor }: { action: DonorAction; donor?: Donor }) {
   const [organ, setOrgan] = useState<OrganId>(donor?.organ ?? "heart");
-  const [state, formAction, pending] = useActionState(action, null);
+  const [state, onSubmit, pending] = useSaveAction(action);
   const organModule = organs.find((item) => item.id === organ) ?? organs[0];
   const profile = donor?.organ === organ ? donor.profile : organModule.donorDefaults;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       {donor ? <input type="hidden" name="id" value={donor.id} /> : null}
       {state?.error ? <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p> : null}
       <Section title="Identity">
@@ -179,12 +197,12 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
 
 export function RecipientForm({ action, recipient }: { action: DonorAction; recipient?: Recipient }) {
   const [organ, setOrgan] = useState<OrganId>(recipient?.organ ?? "heart");
-  const [state, formAction, pending] = useActionState(action, null);
+  const [state, onSubmit, pending] = useSaveAction(action);
   const organModule = organs.find((item) => item.id === organ) ?? organs[0];
   const profile = recipient?.organ === organ ? recipient.profile : organModule.recipientDefaults;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4">
       {recipient ? <input type="hidden" name="id" value={recipient.id} /> : null}
       {state?.error ? <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p> : null}
       <Section title="Identity">

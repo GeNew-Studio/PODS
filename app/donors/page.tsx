@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Suspense } from "react";
 import { ClockBadge, PageIntro, Panel } from "@/components/ui";
+import { useData } from "@/lib/client";
 import { listDonors } from "@/lib/db";
 import { getOrgan } from "@/lib/organs/registry";
 
@@ -12,8 +15,9 @@ export default function DonorsPage() {
   );
 }
 
-async function DonorList() {
-  const donors = await listDonors();
+function DonorList() {
+  const donors = useData("donors", listDonors);
+  if (!donors) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading donors…</p>;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
       <PageIntro
@@ -42,7 +46,7 @@ async function DonorList() {
               return (
                 <tr key={donor.id} className="border-t border-[#d5e0de]">
                   <td className="py-2 pr-3">
-                    <Link href={`/donors/${donor.id}`} className="font-medium text-[#0c6b66]">
+                    <Link href={`/donors/view?id=${donor.id}`} className="font-medium text-[#0c6b66]">
                       {donor.name}
                     </Link>
                     <span className="block text-xs text-[#5c6f6d]">{donor.hospital}</span>

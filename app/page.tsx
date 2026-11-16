@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Suspense } from "react";
 import { RestoreButton } from "@/components/RestoreButton";
 import { ClockBadge, PageIntro, Panel } from "@/components/ui";
 import { restoreSampleData } from "@/lib/actions";
 import { listDonors, listMatches, listRecipients } from "@/lib/db";
+import { useData } from "@/lib/client";
 import { formatWhen } from "@/lib/format";
 import { getOrgan } from "@/lib/organs/registry";
 
@@ -15,8 +18,10 @@ export default function DashboardPage() {
   );
 }
 
-async function Dashboard() {
-  const [donors, recipients, matches] = await Promise.all([listDonors(), listRecipients(), listMatches()]);
+function Dashboard() {
+  const data = useData("dashboard", () => Promise.all([listDonors(), listRecipients(), listMatches()]));
+  if (!data) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading dashboard…</p>;
+  const [donors, recipients, matches] = data;
   const active = recipients.filter((item) => item.active);
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
@@ -48,7 +53,7 @@ async function Dashboard() {
                 return (
                   <tr key={donor.id} className="border-t border-[#d5e0de]">
                     <td className="py-2 pr-3">
-                      <Link href={`/donors/${donor.id}`} className="font-medium text-[#0c6b66]">
+                      <Link href={`/donors/view?id=${donor.id}`} className="font-medium text-[#0c6b66]">
                         {donor.name}
                       </Link>
                     </td>
@@ -77,7 +82,7 @@ async function Dashboard() {
           <ul className="divide-y divide-[#d5e0de] text-sm">
             {matches.slice(0, 6).map((match) => (
               <li key={match.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <Link href={`/matches/${match.id}`} className="font-medium text-[#0c6b66]">
+                <Link href={`/matches/view?id=${match.id}`} className="font-medium text-[#0c6b66]">
                   {match.donorName} · {match.organ}
                 </Link>
                 <span className="text-[#5c6f6d]">

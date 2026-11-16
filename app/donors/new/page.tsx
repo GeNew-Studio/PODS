@@ -1,3 +1,5 @@
+"use client";
+
 import { DonorForm } from "@/components/Forms";
 import { PageIntro } from "@/components/ui";
 import { saveDonor } from "@/lib/actions";

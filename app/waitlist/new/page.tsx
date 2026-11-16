@@ -1,3 +1,5 @@
+"use client";
+
 import { RecipientForm } from "@/components/Forms";
 import { PageIntro } from "@/components/ui";
 import { saveRecipient } from "@/lib/actions";

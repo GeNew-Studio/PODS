@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Suspense } from "react";
 import { PageIntro, Panel } from "@/components/ui";
+import { useData } from "@/lib/client";
 import { listMatches } from "@/lib/db";
 import { formatWhen } from "@/lib/format";
 
@@ -12,8 +15,9 @@ export default function HistoryPage() {
   );
 }
 
-async function History() {
-  const matches = await listMatches();
+function History() {
+  const matches = useData("matches", listMatches);
+  if (!matches) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading history…</p>;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
       <PageIntro title="History" text="Each run keeps the score that was shown at the time. Later edits do not rewrite it." />
@@ -35,7 +39,7 @@ async function History() {
                 <tr key={match.id} className="border-t border-[#d5e0de]">
                   <td className="py-2 pr-3">{formatWhen(match.createdAt)}</td>
                   <td className="py-2 pr-3">
-                    <Link href={`/matches/${match.id}`} className="font-medium text-[#0c6b66]">
+                    <Link href={`/matches/view?id=${match.id}`} className="font-medium text-[#0c6b66]">
                       {match.donorName}
                     </Link>
                     <span className="block text-xs capitalize text-[#5c6f6d]">{match.organ}</span>

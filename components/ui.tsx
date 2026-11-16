@@ -102,3 +102,11 @@ export function ClockBadge({ tone, children }: { tone: "ok" | "soon" | "late"; c
     tone === "ok" ? "bg-emerald-100 text-emerald-900" : tone === "soon" ? "bg-amber-100 text-amber-950" : "bg-red-100 text-red-900";
   return <span className={`rounded px-2 py-0.5 text-xs font-medium ${toneClass}`}>{children}</span>;
 }
+
+export function Missing({ what }: { what: string }) {
+  return (
+    <main className="mx-auto max-w-6xl px-4 py-6">
+      <p className="text-sm text-[#5c6f6d]">This {what} was not found in this browser. Restore sample data on the dashboard if it was removed.</p>
+    </main>
+  );
+}

@@ -1,8 +1,4 @@
-import fs from "fs";
-import path from "path";
 import type { ClinicalDocument, Donor } from "@/lib/types";
-
-export const uploadsDir = path.join(process.cwd(), "data", "uploads");
 
 const signedSeed: Record<string, { storedName: string; fileName: string }> = {
   "doc-h-good-family_consent": {
@@ -59,12 +55,10 @@ function signedFields(id: string): Pick<ClinicalDocument, "signedFileName" | "si
   return { signedFileName: signed.fileName, signedStoredName: signed.storedName };
 }
 
-export function writeDemoSignatures() {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  for (const signed of Object.values(signedSeed)) {
-    const filePath = path.join(uploadsDir, signed.storedName);
-    if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, signatureSvg(signed.fileName));
-  }
+export function demoSignature(storedName: string): Blob | null {
+  const signed = Object.values(signedSeed).find((item) => item.storedName === storedName);
+  if (!signed) return null;
+  return new Blob([signatureSvg(signed.fileName)], { type: "image/svg+xml" });
 }
 
 function signatureSvg(label: string): string {

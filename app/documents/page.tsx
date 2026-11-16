@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { Suspense } from "react";
 import { PageIntro, Panel } from "@/components/ui";
+import { useData } from "@/lib/client";
 import { listDocuments } from "@/lib/db";
 import { documentKindLabel } from "@/lib/documents";
 import { formatWhen } from "@/lib/format";
@@ -13,8 +16,9 @@ export default function DocumentsPage() {
   );
 }
 
-async function DocumentList() {
-  const documents = await listDocuments();
+function DocumentList() {
+  const documents = useData("documents", listDocuments);
+  if (!documents) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading documents…</p>;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
       <PageIntro
@@ -38,7 +42,7 @@ async function DocumentList() {
               {documents.map((document) => (
                 <tr key={document.id} className="border-t border-[#d5e0de]">
                   <td className="py-2 pr-3">
-                    <Link href={`/documents/${document.id}`} className="font-medium text-[#0c6b66]">
+                    <Link href={`/documents/view?id=${document.id}`} className="font-medium text-[#0c6b66]">
                       {document.title}
                     </Link>
                     <span className="block text-xs text-[#5c6f6d]">

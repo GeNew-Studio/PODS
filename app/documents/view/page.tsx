@@ -1,24 +1,29 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { PageIntro, Panel } from "@/components/ui";
+import { Missing, PageIntro, Panel } from "@/components/ui";
 import { attachSigned } from "@/lib/actions";
+import { useData, useNavigateAction } from "@/lib/client";
 import { getDocument } from "@/lib/db";
 import { documentKindLabel } from "@/lib/documents";
 import { formatWhen } from "@/lib/format";
 
-export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+export default function DocumentPage() {
   return (
     <Suspense fallback={<p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading document…</p>}>
-      <DocumentDetail params={params} />
+      <DocumentDetail />
     </Suspense>
   );
 }
 
-async function DocumentDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const document = await getDocument(id);
-  if (!document) notFound();
+function DocumentDetail() {
+  const id = useSearchParams().get("id") ?? "";
+  const attachSignedAction = useNavigateAction(attachSigned);
+  const document = useData(`document:${id}`, () => getDocument(id));
+  if (document === undefined) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading document…</p>;
+  if (!document) return <Missing what="document" />;
   return (
     <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
       <PageIntro
@@ -63,14 +68,14 @@ async function DocumentDetail({ params }: { params: Promise<{ id: string }> }) {
         {document.signedStoredName ? (
           <p className="mb-3 text-sm">
             A signed copy is attached.{" "}
-            <Link href={`/documents/${document.id}/file`} className="font-medium text-[#0c6b66] underline">
+            <Link href={`/documents/file?id=${document.id}`} className="font-medium text-[#0c6b66] underline">
               {document.signedFileName ?? "Open signed copy"}
             </Link>
           </p>
         ) : (
           <p className="mb-3 text-sm text-[#5c6f6d]">No signed copy is attached yet.</p>
         )}
-        <form action={attachSigned} className="flex flex-wrap items-end gap-3">
+        <form action={attachSignedAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="documentId" value={document.id} />
           <label className="text-sm">
             Attach a signed PDF or image

@@ -1,22 +1,27 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { PageIntro, Panel } from "@/components/ui";
+import { useData } from "@/lib/client";
 import { listRecipients } from "@/lib/db";
 import { bmi } from "@/lib/format";
 import { getOrgan, isOrganId } from "@/lib/organs/registry";
 
-export default function WaitlistPage({ searchParams }: { searchParams: Promise<{ organ?: string }> }) {
+export default function WaitlistPage() {
   return (
     <Suspense fallback={<p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading waiting list…</p>}>
-      <Waitlist searchParams={searchParams} />
+      <Waitlist />
     </Suspense>
   );
 }
 
-async function Waitlist({ searchParams }: { searchParams: Promise<{ organ?: string }> }) {
-  const query = await searchParams;
-  const organ = query.organ && isOrganId(query.organ) ? query.organ : undefined;
-  const recipients = await listRecipients(organ);
+function Waitlist() {
+  const queryOrgan = useSearchParams().get("organ");
+  const organ = queryOrgan && isOrganId(queryOrgan) ? queryOrgan : undefined;
+  const recipients = useData(`recipients:${organ ?? "all"}`, () => listRecipients(organ));
+  if (!recipients) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading waiting list…</p>;
   return (
     <main className="mx-auto max-w-6xl px-4 py-6">
       <PageIntro
@@ -52,7 +57,7 @@ async function Waitlist({ searchParams }: { searchParams: Promise<{ organ?: stri
               return (
                 <tr key={recipient.id} className="border-t border-[#d5e0de]">
                   <td className="py-2 pr-3">
-                    <Link href={`/waitlist/${recipient.id}/edit`} className="font-medium text-[#0c6b66]">
+                    <Link href={`/waitlist/edit?id=${recipient.id}`} className="font-medium text-[#0c6b66]">
                       {recipient.name}
                     </Link>
                     <span className="block text-xs text-[#5c6f6d]">

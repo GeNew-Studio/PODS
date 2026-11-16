@@ -197,4 +197,4 @@ export type FieldDef = {
   help?: string;
 };
 
-export type ActionState = { error: string } | null;
+export type ActionState = { error?: string; redirectTo?: string } | null;

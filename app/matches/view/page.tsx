@@ -1,25 +1,30 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { FactorTable, PageIntro, Panel } from "@/components/ui";
+import { FactorTable, Missing, PageIntro, Panel } from "@/components/ui";
 import { openConsent, saveDecision } from "@/lib/actions";
+import { useData, useNavigateAction } from "@/lib/client";
 import { getMatch } from "@/lib/db";
 import { formatWhen } from "@/lib/format";
 import { getOrgan } from "@/lib/organs/registry";
 import type { ExclusionRow, RankedRow } from "@/lib/types";
 
-export default function MatchPage({ params }: { params: Promise<{ id: string }> }) {
+export default function MatchPage() {
   return (
     <Suspense fallback={<p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading match…</p>}>
-      <MatchDetail params={params} />
+      <MatchDetail />
     </Suspense>
   );
 }
 
-async function MatchDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const match = await getMatch(id);
-  if (!match) notFound();
+function MatchDetail() {
+  const id = useSearchParams().get("id") ?? "";
+  const saveDecisionAction = useNavigateAction(saveDecision);
+  const match = useData(`match:${id}`, () => getMatch(id));
+  if (match === undefined) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading match…</p>;
+  if (!match) return <Missing what="match" />;
   const organModule = getOrgan(match.organ);
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
@@ -28,7 +33,7 @@ async function MatchDetail({ params }: { params: Promise<{ id: string }> }) {
         title={match.donorName}
         text={`Quality index ${match.qualityIndex}. Compatibility is the total score out of 100. A lower mismatch is the safer override. Click a patient to produce a consent form.`}
         action={
-          <Link href={`/donors/${match.donorId}`} className="text-sm text-[#0c6b66]">
+          <Link href={`/donors/view?id=${match.donorId}`} className="text-sm text-[#0c6b66]">
             Donor record
           </Link>
         }
@@ -99,7 +104,7 @@ async function MatchDetail({ params }: { params: Promise<{ id: string }> }) {
               {match.decisionNote ? ` — ${match.decisionNote}` : ""}
             </p>
           ) : null}
-          <form action={saveDecision} className="grid gap-3 sm:grid-cols-2">
+          <form key={`${match.offeredRecipientId}-${match.decisionStatus}-${match.decisionNote}`} action={saveDecisionAction} className="grid gap-3 sm:grid-cols-2">
             <input type="hidden" name="matchId" value={match.id} />
             <label className="text-sm">
               Patient
@@ -142,6 +147,7 @@ function OfferCard({
   organLabel: string;
   matchId: string;
 }) {
+  const openConsentAction = useNavigateAction(openConsent);
   return (
     <article className="rounded border border-[#d5e0de]">
       <div className="flex flex-wrap items-start justify-between gap-3 px-3 py-3">
@@ -149,7 +155,7 @@ function OfferCard({
           <p className="text-xs font-semibold uppercase tracking-wide text-[#0c6b66]">
             {organLabel} offered{rank ? ` · rank ${rank}` : ""}
           </p>
-          <form action={openConsent}>
+          <form action={openConsentAction}>
             <input type="hidden" name="matchId" value={matchId} />
             <input type="hidden" name="recipientId" value={row.recipientId} />
             <button className="text-left text-lg font-semibold text-[#0c6b66] underline">{row.recipientName}</button>
