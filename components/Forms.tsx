@@ -2,10 +2,23 @@
 
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useState, type FormEvent } from "react";
-import { BLOOD_TYPES, CLUSTERS, MEDICINES, PERFUSION_DEVICES } from "@/lib/constants";
+import {
+  BLOOD_TYPES,
+  CAUSES_OF_DEATH,
+  CLUSTERS,
+  DCD_NOTE,
+  ETHNICITIES,
+  MEDICINES,
+  OUTCOMES,
+  PATHWAY_LABELS,
+  PERFUSION_DEVICES,
+  causePathway,
+  pathwayOf,
+} from "@/lib/constants";
+import { HOSPITALS, PRIVATE_HOSPITAL_NOTE, findHospital } from "@/lib/hospitals";
 import { bmi } from "@/lib/format";
 import { listOrgans } from "@/lib/organs/registry";
-import type { ActionState, Donor, FieldDef, OrganId, Profile, Recipient } from "@/lib/types";
+import type { ActionState, DonationPathway, Donor, FieldDef, OrganId, Profile, Recipient } from "@/lib/types";
 
 const input = "mt-1 w-full rounded border border-[#d5e0de] bg-white px-2 py-1.5 text-sm";
 const organs = listOrgans();
@@ -65,15 +78,14 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
             ))}
           </select>
         </Label>
+        <EthnicityField value={donor?.ethnicity} />
       </Section>
       <Section title="Clinical background">
         <Label text="HLA antigens" help="Comma-separated, for example A2, B44, DR4.">
           <input name="hla" defaultValue={donor?.hlaAntigens.join(", ") ?? ""} className={input} />
         </Label>
         <Check name="hlaComplete" label="HLA typing is complete" defaultChecked={donor?.hlaComplete ?? true} />
-        <Label text="Cause of death">
-          <input name="causeOfDeath" required defaultValue={donor?.causeOfDeath ?? ""} className={input} />
-        </Label>
+        <CauseOfDeathField donor={donor} />
         <Label text="Medicines" help="Routine medicines are recorded and do not change the score by themselves.">
           <div className="mt-1 grid grid-cols-2 gap-1 text-sm">
             {MEDICINES.map((item) => (
@@ -107,16 +119,7 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
         </Label>
       </Section>
       <Section title="Logistics">
-        <Label text="Donor hospital">
-          <input name="hospital" required defaultValue={donor?.hospital ?? ""} className={input} />
-        </Label>
-        <Label text="Cluster">
-          <select name="cluster" defaultValue={donor?.cluster ?? "Hong Kong West"} className={input}>
-            {CLUSTERS.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </Label>
+        <HospitalField donor={donor} />
         <Label text="Cold ischaemic time (hours)">
           <input
             name="coldIschaemicHours"
@@ -129,7 +132,7 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
             className={input}
           />
         </Label>
-        <Label text="Warm ischaemic time (minutes)" help="Stored for a later kidney or liver module. It does not change the heart or lung score.">
+        <Label text="Warm ischaemic time (minutes)" help="Relevant to DCD donors, which are not yet allocated in Hong Kong. Recorded only.">
           <input
             name="warmIschaemicMinutes"
             type="number"
@@ -163,7 +166,7 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
           />
         </Label>
         <p className="text-sm text-[#5c6f6d] sm:col-span-2">
-          Hearts are implanted at Queen Mary Hospital. Listing and assessment are at Grantham Hospital.
+          {organModule.label} implant site: {organModule.implantSite}. Listing centre: {organModule.listingCentre}.
         </p>
       </Section>
       <Section title={`${organModule.label} details`}>
@@ -174,9 +177,8 @@ export function DonorForm({ action, donor }: { action: DonorAction; donor?: Dono
         </div>
       </Section>
       <Section title="Safety flags">
-        <Check name="brainDead" label="Certified brain dead" defaultChecked={donor?.brainDead ?? true} />
+        <Check name="brainDead" label="Brainstem death certified (DBD)" defaultChecked={donor?.brainDead ?? true} />
         <Check name="familyConsent" label="Family consent recorded" defaultChecked={donor?.familyConsent ?? true} />
-        <Check name="circulatoryDeath" label="Donation after circulatory death" defaultChecked={donor?.circulatoryDeath ?? false} />
         <Check name="hiv" label="Active HIV" defaultChecked={donor?.hiv ?? false} />
         <Check name="cjd" label="CJD" defaultChecked={donor?.cjd ?? false} />
         <Check name="uncontrolledSepsis" label="Uncontrolled sepsis" defaultChecked={donor?.uncontrolledSepsis ?? false} />
@@ -231,7 +233,16 @@ export function RecipientForm({ action, recipient }: { action: DonorAction; reci
             ))}
           </select>
         </Label>
-        <Check name="active" label="Active on the waiting list" defaultChecked={recipient?.active ?? true} />
+        <EthnicityField value={recipient?.ethnicity} />
+        <Label text="Outcome status" help="Only patients marked Active - waiting are included in a new match.">
+          <select name="outcome" defaultValue={recipient?.outcome ?? "waiting"} className={input}>
+            {OUTCOMES.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </Label>
       </Section>
       <Section title="Clinical background">
         <Label text="HLA antigens">
@@ -248,7 +259,7 @@ export function RecipientForm({ action, recipient }: { action: DonorAction; reci
           <select name="cancerStatus" defaultValue={recipient?.cancerStatus ?? "none"} className={input}>
             <option value="none">None</option>
             <option value="remission">Remission</option>
-            <option value="active">Active extra-thoracic cancer</option>
+            <option value="active">Active cancer outside the organ being replaced</option>
           </select>
         </Label>
         <Label text="Relevant clinical background">
@@ -278,7 +289,12 @@ export function RecipientForm({ action, recipient }: { action: DonorAction; reci
           <input name="daysWaiting" type="number" required min={0} max={5000} defaultValue={recipient?.daysWaiting ?? 0} className={input} />
         </Label>
         <Label text="Listing hospital">
-          <input name="hospital" defaultValue={recipient?.hospital ?? "Grantham Hospital"} className={input} />
+          <input
+            key={organ}
+            name="hospital"
+            defaultValue={recipient?.organ === organ ? recipient.hospital : organModule.listingCentre}
+            className={input}
+          />
         </Label>
         <Label text="Cluster">
           <select name="cluster" defaultValue={recipient?.cluster ?? "Hong Kong West"} className={input}>
@@ -299,6 +315,121 @@ export function RecipientForm({ action, recipient }: { action: DonorAction; reci
         {pending ? "Saving…" : "Save patient"}
       </button>
     </form>
+  );
+}
+
+function EthnicityField({ value }: { value?: Donor["ethnicity"] }) {
+  return (
+    <Label text="Ethnicity">
+      <select name="ethnicity" defaultValue={value ?? "chinese"} className={input}>
+        {ETHNICITIES.map((item) => (
+          <option key={item.value} value={item.value}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+    </Label>
+  );
+}
+
+function HospitalField({ donor }: { donor?: Donor }) {
+  const [hospital, setHospital] = useState(donor?.hospital ?? "Queen Elizabeth Hospital");
+  const known = findHospital(hospital);
+  const legacy = donor && !findHospital(donor.hospital) ? donor.hospital : null;
+  return (
+    <>
+      <Label text="Donor hospital" help="Hospital Authority hospitals first. Private hospitals are listed separately.">
+        <select name="hospital" value={hospital} onChange={(event) => setHospital(event.target.value)} className={input}>
+          <optgroup label="Public (Hospital Authority)">
+            {HOSPITALS.filter((item) => item.sector === "public").map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Private">
+            {HOSPITALS.filter((item) => item.sector === "private").map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </optgroup>
+          {legacy ? (
+            <optgroup label="Earlier record">
+              <option value={legacy}>{legacy}</option>
+            </optgroup>
+          ) : null}
+        </select>
+      </Label>
+      {known ? (
+        <div className="text-sm">
+          <span className="font-medium text-[#143331]">Cluster</span>
+          <p className="mt-1 rounded border border-[#d5e0de] bg-[#f4f8f7] px-2 py-1.5">{known.cluster}</p>
+          <input type="hidden" name="cluster" value={known.cluster} />
+        </div>
+      ) : (
+        <Label text="Cluster">
+          <select name="cluster" defaultValue={donor?.cluster ?? "Hong Kong West"} className={input}>
+            {CLUSTERS.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </Label>
+      )}
+      {known?.sector === "private" ? (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:col-span-2">
+          {PRIVATE_HOSPITAL_NOTE}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function CauseOfDeathField({ donor }: { donor?: Donor }) {
+  const initialKnown = donor ? causePathway(donor.causeOfDeath) !== null : true;
+  const [cause, setCause] = useState(donor ? (initialKnown ? donor.causeOfDeath : "other") : CAUSES_OF_DEATH[0].value);
+  const [pathway, setPathway] = useState<DonationPathway>(donor ? pathwayOf(donor) : "DBD");
+  const choose = (value: string) => {
+    setCause(value);
+    const suggested = causePathway(value);
+    if (suggested) setPathway(suggested);
+  };
+  return (
+    <>
+      <Label text="Cause of death" help="Pick the specific cause. Choose Other only when none fits.">
+        <select name="causeOfDeath" value={cause} onChange={(event) => choose(event.target.value)} className={input}>
+          {(["DBD", "DCD"] as const).map((group) => (
+            <optgroup key={group} label={group === "DBD" ? "Leading to brainstem death (DBD)" : "Circulatory death pathway (DCD)"}>
+              {CAUSES_OF_DEATH.filter((item) => item.pathway === group).map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.value}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          <option value="other">Other (describe)</option>
+        </select>
+      </Label>
+      <Label text="Donation pathway">
+        <select
+          name="pathway"
+          value={pathway}
+          onChange={(event) => setPathway(event.target.value as DonationPathway)}
+          className={input}
+        >
+          <option value="DBD">{PATHWAY_LABELS.DBD}</option>
+          <option value="DCD">{PATHWAY_LABELS.DCD}</option>
+        </select>
+      </Label>
+      {cause === "other" ? (
+        <Label text="Other cause of death" help="Be specific, for example the mechanism and site of injury.">
+          <input name="causeOfDeathOther" required defaultValue={donor && !initialKnown ? donor.causeOfDeath : ""} className={input} />
+        </Label>
+      ) : null}
+      {pathway === "DCD" ? (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 sm:col-span-2">{DCD_NOTE}</p>
+      ) : null}
+    </>
   );
 }
 

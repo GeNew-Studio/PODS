@@ -50,5 +50,10 @@ export function blockedResult(reasons: string[], urgencyLabel = ""): ScoreResult
     clusterRank: 0,
     qualityIndex: 0,
     urgencyLabel,
+    tier: 99,
+    tierLabel: "",
+    bgPriority: 0,
+    sortKey: 0,
+    sortBasis: "score",
   };
 }

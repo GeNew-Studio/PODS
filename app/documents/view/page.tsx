@@ -7,6 +7,7 @@ import { Missing, PageIntro, Panel } from "@/components/ui";
 import { attachSigned } from "@/lib/actions";
 import { useData, useNavigateAction } from "@/lib/client";
 import { getDocument } from "@/lib/db";
+import { PATHWAY_LABELS } from "@/lib/constants";
 import { documentKindLabel } from "@/lib/documents";
 import { formatWhen } from "@/lib/format";
 
@@ -46,10 +47,11 @@ function DocumentDetail() {
           <Row label="Donor hospital" value={document.hospital} />
           <Row label="Recorded" value={formatWhen(document.createdAt)} />
           {document.kind === "cause_of_death" ? <Row label="Cause of death" value={document.causeOfDeath} /> : null}
+          <Row label="Donation pathway" value={PATHWAY_LABELS[document.donationPathway]} />
           {document.kind === "family_consent" ? (
             <Row
               label="Statement"
-              value="The family has recorded consent for donation of the named organ after brain death. This page stands in for the scanned consent form."
+              value={`The family has recorded consent for donation of the named organ (${document.donationPathway}). This page stands in for the scanned consent form.`}
             />
           ) : null}
           {document.recipientName ? <Row label="Recipient" value={document.recipientName} /> : null}

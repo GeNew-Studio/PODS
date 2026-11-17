@@ -1,4 +1,4 @@
-export type OrganId = "heart" | "lung";
+export type OrganId = "heart" | "lung" | "liver";
 
 export type BloodType = "O" | "A" | "B" | "AB";
 
@@ -21,6 +21,25 @@ export type FunctionalStatus = "good" | "fair" | "poor";
 
 export type DonorStatus = "offered" | "accepted";
 
+export type DonationPathway = "DBD" | "DCD";
+
+export type Ethnicity =
+  | "chinese"
+  | "filipino"
+  | "indonesian"
+  | "south_asian"
+  | "other_asian"
+  | "white"
+  | "mixed_other";
+
+export type OutcomeStatus =
+  | "waiting"
+  | "suspended"
+  | "transplanted"
+  | "removed_deteriorated"
+  | "removed_improved"
+  | "died_waiting";
+
 export type DocumentKind = "family_consent" | "cause_of_death" | "recipient_consent";
 
 export type DecisionStatus = "offered" | "accepted" | "declined";
@@ -32,6 +51,7 @@ export type Donor = {
   organ: OrganId;
   name: string;
   sex: "male" | "female";
+  ethnicity: Ethnicity;
   age: number;
   heightCm: number;
   weightKg: number;
@@ -69,6 +89,7 @@ export type Recipient = {
   organ: OrganId;
   name: string;
   sex: "male" | "female";
+  ethnicity: Ethnicity;
   age: number;
   heightCm: number;
   weightKg: number;
@@ -86,6 +107,8 @@ export type Recipient = {
   hospital: string;
   cluster: Cluster;
   profile: Profile;
+  outcome: OutcomeStatus;
+  // Derived from outcome: only "waiting" patients are matched.
   active: boolean;
 };
 
@@ -118,6 +141,14 @@ export type ScoreResult = {
   clusterRank: number;
   qualityIndex: number;
   urgencyLabel: string;
+  // NHS-style offering order. Lower tier is offered first. Inside a tier, a lower
+  // bgPriority is offered first, then a higher sortKey (time waiting in the tier, or
+  // the PODS score where the policy leaves the choice to the centre).
+  tier: number;
+  tierLabel: string;
+  bgPriority: number;
+  sortKey: number;
+  sortBasis: "waiting" | "score";
 };
 
 export type QualityReport = {
@@ -139,6 +170,8 @@ export type RankedRow = {
   steering: string | null;
   qualityIndex: number;
   daysWaiting: number;
+  tierLabel?: string;
+  sortBasis?: "waiting" | "score";
 };
 
 export type ExclusionRow = {
@@ -162,6 +195,9 @@ export type MatchRecord = {
   offeredRecipientId: string | null;
   decisionStatus: DecisionStatus | null;
   decisionNote: string;
+  // When the current offer was made, and when it was accepted or declined.
+  offeredAt?: string | null;
+  decidedAt?: string | null;
 };
 
 export type ClinicalDocument = {
@@ -173,6 +209,7 @@ export type ClinicalDocument = {
   organ: OrganId;
   hospital: string;
   causeOfDeath: string;
+  donationPathway: DonationPathway;
   donorBlood: string;
   recipientId: string | null;
   recipientName: string | null;

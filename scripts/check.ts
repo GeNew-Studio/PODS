@@ -17,12 +17,20 @@ for (const donor of donors) {
   const ranked = waiting
     .map((recipient) => ({ recipient, result: organModule.evaluate(donor, recipient) }))
     .filter((item) => item.result.eligible)
-    .sort((a, b) => b.result.score - a.result.score);
+    .sort(
+      (a, b) =>
+        a.result.tier - b.result.tier ||
+        a.result.bgPriority - b.result.bgPriority ||
+        b.result.sortKey - a.result.sortKey ||
+        b.result.score - a.result.score,
+    );
   const excluded = waiting.filter((recipient) => !organModule.evaluate(donor, recipient).eligible);
-  ranked.slice(0, 3).forEach((item, index) => {
+  ranked.forEach((item, index) => {
     console.log(
-      `  ${index + 1}. ${item.recipient.name} ${item.result.score} urg ${item.result.urgencyPoints} ${item.result.steering ?? "no steering"}`,
+      `  ${index + 1}. [${item.result.tierLabel || "-"} bg${item.result.bgPriority}] ${item.recipient.name} ${item.recipient.bloodType} score ${item.result.score} ${item.result.urgencyLabel} ${item.result.steering ? "STEERED" : ""}`,
     );
   });
-  console.log(`  excluded ${excluded.length}: ${excluded.map((item) => item.name).join(", ")}`);
+  for (const recipient of excluded) {
+    console.log(`  x ${recipient.name}: ${organModule.evaluate(donor, recipient).reasons.join(" | ")}`);
+  }
 }

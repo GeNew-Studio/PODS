@@ -10,8 +10,8 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "PODS",
-  description: "Local demonstration for heart and lung organ matching.",
+  title: "PODS | Platform for Organ Donation Systems",
+  description: "Platform for Organ Donation Systems. Hong Kong demonstration for heart, liver, and lung matching.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

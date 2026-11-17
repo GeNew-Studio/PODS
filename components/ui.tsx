@@ -110,3 +110,68 @@ export function Missing({ what }: { what: string }) {
     </main>
   );
 }
+
+export function PrivateBadge() {
+  return (
+    <span
+      title="Private hospital referral. A minority of donors in Hong Kong."
+      className="ml-1.5 inline-block rounded border border-amber-300 bg-amber-50 px-1.5 py-px align-middle text-[11px] font-semibold uppercase tracking-wide text-amber-900"
+    >
+      Private
+    </span>
+  );
+}
+
+export function PathwayBadge({ pathway }: { pathway: "DBD" | "DCD" }) {
+  const dcd = pathway === "DCD";
+  return (
+    <span
+      title={dcd ? "Donation after circulatory death. Not yet practised in Hong Kong." : "Donation after brainstem death."}
+      className={`inline-block rounded px-1.5 py-px text-xs font-semibold ${
+        dcd ? "border border-amber-300 bg-amber-50 text-amber-900" : "bg-[#e3f1ef] text-[#0c6b66]"
+      }`}
+    >
+      {pathway}
+      {dcd ? " · not in HK yet" : ""}
+    </span>
+  );
+}
+
+export function Modal({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1f1d]/55 px-4"
+      onClick={onClose}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-md rounded-lg bg-white shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[#d5e0de] px-5 py-3">
+          <h2 className="text-base font-semibold text-[#143331]">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-xl leading-none text-[#5c6f6d] hover:text-[#143331]">
+            ×
+          </button>
+        </div>
+        <div className="px-5 py-4">{children}</div>
+      </div>
+    </div>
+  );
+}

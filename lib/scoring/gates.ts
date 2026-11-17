@@ -3,10 +3,10 @@ import { aboCompatible, virtualCrossmatch } from "@/lib/scoring/abo";
 
 export function sharedDonorGates(donor: Donor): string[] {
   const reasons: string[] = [];
-  if (!donor.brainDead || donor.circulatoryDeath) {
-    reasons.push(
-      "Heart and lung allocation in this demonstration uses brain-dead donors only. This donor is not certified brain dead, or the pathway is donation after circulatory death.",
-    );
+  if (donor.circulatoryDeath) {
+    reasons.push("DCD donor. Donation after circulatory death is not yet practised in Hong Kong, so this organ is not allocated.");
+  } else if (!donor.brainDead) {
+    reasons.push("Brainstem death has not been certified. Hong Kong deceased donation uses DBD donors only.");
   }
   if (!donor.familyConsent) {
     reasons.push("Family consent has not been recorded. In Hong Kong the family decision stands.");
@@ -38,14 +38,17 @@ export function sharedPairGates(donor: Donor, recipient: Recipient): string[] {
     );
   }
   if (recipient.cancerStatus === "active") {
-    reasons.push("Recipient has active extra-thoracic cancer.");
+    reasons.push("Recipient has active cancer outside the organ being replaced.");
   }
   return reasons;
 }
 
 export function matchCanStart(donor: Donor): string | null {
-  if (!donor.brainDead || donor.circulatoryDeath) {
-    return "A match cannot start until the donor is certified brain dead. Circulatory-death donors are not allocated a heart or lung in this demonstration.";
+  if (donor.circulatoryDeath) {
+    return "A match cannot start for a DCD donor. Donation after circulatory death is not yet practised in Hong Kong.";
+  }
+  if (!donor.brainDead) {
+    return "A match cannot start until brainstem death is certified.";
   }
   if (!donor.familyConsent) {
     return "A match cannot start until family consent is recorded.";

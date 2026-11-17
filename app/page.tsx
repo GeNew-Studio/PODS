@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { RestoreButton } from "@/components/RestoreButton";
-import { ClockBadge, PageIntro, Panel } from "@/components/ui";
+import { ClockBadge, PageIntro, Panel, PrivateBadge } from "@/components/ui";
 import { restoreSampleData } from "@/lib/actions";
 import { listDonors, listMatches, listRecipients } from "@/lib/db";
 import { useData } from "@/lib/client";
 import { formatWhen } from "@/lib/format";
+import { isPrivateHospital } from "@/lib/hospitals";
 import { getOrgan } from "@/lib/organs/registry";
 
 export default function DashboardPage() {
@@ -23,19 +24,31 @@ function Dashboard() {
   if (!data) return <p className="mx-auto max-w-6xl px-4 py-6 text-sm">Loading dashboard…</p>;
   const [donors, recipients, matches] = data;
   const active = recipients.filter((item) => item.active);
+  const privateDonors = donors.filter((item) => isPrivateHospital(item.hospital)).length;
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
       <PageIntro
         eyebrow="Hong Kong demonstration"
         title="Dashboard"
-        text="Heart and lung donors are scored separately. Queen Mary Hospital is the implant site. Grantham Hospital is the listing centre."
+        text="Heart, liver, and lung donors are scored separately. Heart and lung patients are listed at Grantham Hospital and implanted at Queen Mary Hospital. Liver patients are listed and implanted at Queen Mary Hospital."
       />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Heart waiting" value={String(active.filter((item) => item.organ === "heart").length)} />
+        <Stat label="Liver waiting" value={String(active.filter((item) => item.organ === "liver").length)} />
         <Stat label="Lung waiting" value={String(active.filter((item) => item.organ === "lung").length)} />
-        <Stat label="Saved matches" value={String(matches.length)} />
+        <Stat
+          label="Match runs on record"
+          value={String(matches.length)}
+          hint="Each time a donor is run against the waiting list, the ranked result is kept in History for audit."
+        />
       </div>
       <Panel title="Donors on the clock">
+        {privateDonors > 0 ? (
+          <p className="mb-3 text-sm text-amber-900">
+            {privateDonors} of {donors.length} donors are in a private hospital. These are marked{" "}
+            <PrivateBadge /> and need extra retrieval coordination.
+          </p>
+        ) : null}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-[#5c6f6d]">
@@ -58,8 +71,9 @@ function Dashboard() {
                       </Link>
                     </td>
                     <td className="py-2 pr-3">{organModule.label}</td>
-                    <td className="py-2 pr-3">
+                    <td className={`py-2 pr-3 ${isPrivateHospital(donor.hospital) ? "bg-amber-50/60" : ""}`}>
                       {donor.hospital}
+                      {isPrivateHospital(donor.hospital) ? <PrivateBadge /> : null}
                       <span className="block text-xs text-[#5c6f6d]">{donor.cluster}</span>
                     </td>
                     <td className="py-2 pr-3">
@@ -104,11 +118,12 @@ function Dashboard() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-md border border-[#d5e0de] bg-white px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-[#5c6f6d]">{label}</p>
       <p className="text-2xl font-semibold text-[#143331]">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-[#5c6f6d]">{hint}</p> : null}
     </div>
   );
 }

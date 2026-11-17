@@ -470,6 +470,11 @@ export function evaluateLung(donor: Donor, recipient: Recipient): ScoreResult {
     clusterRank: clusterRank(recipient.cluster),
     qualityIndex: quality.value,
     urgencyLabel,
+    tier: 0,
+    tierLabel: "",
+    bgPriority: 0,
+    sortKey: totals.score,
+    sortBasis: "score",
   };
 }
 
@@ -515,4 +520,14 @@ export const lungModule: OrganModule = {
       { label: "CMV", value: profile.cmvPositive ? "Positive" : "Negative" },
     ];
   },
+  urgency(recipient) {
+    return SUPPORT_LABEL[readLungRecipient(recipient.profile).support];
+  },
+  diagnosis(recipient) {
+    const value = readLungRecipient(recipient.profile).diagnosis;
+    const options = lungRecipientFields.find((field) => field.key === "diagnosis")?.options ?? [];
+    return options.find((item) => item.value === value)?.label ?? "Not recorded";
+  },
+  listingCentre: "Grantham Hospital",
+  implantSite: IMPLANT_HOSPITAL,
 };

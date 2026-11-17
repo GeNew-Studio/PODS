@@ -45,7 +45,15 @@ function History() {
                     <span className="block text-xs capitalize text-[#5c6f6d]">{match.organ}</span>
                   </td>
                   <td className="py-2 pr-3">{match.top[0]?.score ?? "—"}</td>
-                  <td className="py-2 capitalize">{match.decisionStatus ?? "None"}</td>
+                  <td className="py-2 capitalize">
+                    {match.decisionStatus ? (
+                      <Link href={`/offers/view?id=${match.id}`} className="font-medium text-[#0c6b66] underline">
+                        {match.decisionStatus}
+                      </Link>
+                    ) : (
+                      "None"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

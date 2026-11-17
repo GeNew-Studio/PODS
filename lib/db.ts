@@ -10,9 +10,11 @@ import type {
   DecisionStatus,
   Donor,
   DonorStatus,
+  Ethnicity,
   FunctionalStatus,
   MatchRecord,
   OrganId,
+  OutcomeStatus,
   PerfusionDevice,
   Profile,
   RankedRow,
@@ -29,7 +31,8 @@ type Store = {
   documents: Record<string, ClinicalDocument>;
 };
 
-const STORAGE_KEY = "pods:data:v1";
+// v3: NHS heart tiers and liver UKELD routes (v2 added real HK hospitals, liver, ethnicity, outcome, DBD/DCD).
+const STORAGE_KEY = "pods:data:v3";
 export const CHANGE_EVENT = "pods-change";
 
 let memory: Store | null = null;
@@ -95,7 +98,16 @@ function clone<T>(value: T): T {
 
 function normalizeDonor(donor: Donor): Donor {
   const status = donor.status === "accepted" ? "accepted" : "offered";
-  return { ...donor, status };
+  return { ...donor, ethnicity: donor.ethnicity ?? "chinese", status };
+}
+
+function normalizeRecipient(recipient: Recipient): Recipient {
+  const outcome = recipient.outcome ?? (recipient.active ? "waiting" : "suspended");
+  return { ...recipient, ethnicity: recipient.ethnicity ?? "chinese", outcome, active: outcome === "waiting" };
+}
+
+function normalizeDocument(document: ClinicalDocument): ClinicalDocument {
+  return { ...document, donationPathway: document.donationPathway ?? "DBD" };
 }
 
 function normalizeRow(row: RankedRow): RankedRow {
@@ -104,7 +116,7 @@ function normalizeRow(row: RankedRow): RankedRow {
 
 function normalizeMatch(match: MatchRecord): MatchRecord {
   const eligible = (match.eligible?.length ? match.eligible : match.top).map(normalizeRow);
-  return { ...match, eligible, top: eligible.slice(0, 3) };
+  return { ...match, eligible, top: eligible.slice(0, 3), offeredAt: match.offeredAt ?? null, decidedAt: match.decidedAt ?? null };
 }
 
 export async function listDonors(): Promise<Donor[]> {
@@ -120,14 +132,14 @@ export async function getDonor(id: string): Promise<Donor | null> {
 
 export async function listRecipients(organ?: OrganId): Promise<Recipient[]> {
   return Object.values(load().recipients)
-    .map((item) => clone(item))
+    .map((item) => normalizeRecipient(clone(item)))
     .filter((item) => (organ ? item.organ === organ : true))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getRecipient(id: string): Promise<Recipient | null> {
   const item = load().recipients[id];
-  return item ? clone(item) : null;
+  return item ? normalizeRecipient(clone(item)) : null;
 }
 
 export async function saveDonor(donor: Donor): Promise<void> {
@@ -136,11 +148,20 @@ export async function saveDonor(donor: Donor): Promise<void> {
   for (const document of donorDocuments(donor, new Date().toISOString())) {
     if (!store.documents[document.id]) store.documents[document.id] = document;
   }
+  // Keep every document for this donor in step with the donor record.
+  for (const document of Object.values(store.documents)) {
+    if (document.donorId !== donor.id) continue;
+    document.donorName = donor.name;
+    document.hospital = donor.hospital;
+    document.causeOfDeath = donor.causeOfDeath;
+    document.donationPathway = donor.circulatoryDeath ? "DCD" : "DBD";
+    document.donorBlood = donor.bloodType;
+  }
   persist();
 }
 
 export async function saveRecipient(recipient: Recipient): Promise<void> {
-  load().recipients[recipient.id] = clone(recipient);
+  load().recipients[recipient.id] = clone({ ...recipient, active: recipient.outcome === "waiting" });
   persist();
 }
 
@@ -168,7 +189,7 @@ export async function restoreSample(): Promise<void> {
 
 export async function listDocuments(): Promise<ClinicalDocument[]> {
   return Object.values(load().documents)
-    .map((item) => clone(item))
+    .map((item) => normalizeDocument(clone(item)))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.title.localeCompare(b.title));
 }
 
@@ -179,7 +200,7 @@ export async function listDonorDocuments(donorId: string): Promise<ClinicalDocum
 
 export async function getDocument(id: string): Promise<ClinicalDocument | null> {
   const item = load().documents[id];
-  return item ? clone(item) : null;
+  return item ? normalizeDocument(clone(item)) : null;
 }
 
 export async function saveDocument(document: ClinicalDocument): Promise<void> {
@@ -246,8 +267,8 @@ async function clearFiles(): Promise<void> {
 }
 
 export function asOrgan(value: string): OrganId {
-  if (value === "heart" || value === "lung") return value;
-  throw new Error("Organ must be heart or lung.");
+  if (value === "heart" || value === "lung" || value === "liver") return value;
+  throw new Error("Organ must be heart, liver, or lung.");
 }
 
 export function asBlood(value: string): BloodType {
@@ -297,6 +318,25 @@ export function asDecision(value: string): DecisionStatus {
 export function asDonorStatus(value: string): DonorStatus {
   if (value === "accepted") return "accepted";
   return "offered";
+}
+
+export function asEthnicity(value: string): Ethnicity {
+  const allowed: Ethnicity[] = ["chinese", "filipino", "indonesian", "south_asian", "other_asian", "white", "mixed_other"];
+  if (allowed.includes(value as Ethnicity)) return value as Ethnicity;
+  throw new Error("Ethnicity is not valid.");
+}
+
+export function asOutcome(value: string): OutcomeStatus {
+  const allowed: OutcomeStatus[] = [
+    "waiting",
+    "suspended",
+    "transplanted",
+    "removed_deteriorated",
+    "removed_improved",
+    "died_waiting",
+  ];
+  if (allowed.includes(value as OutcomeStatus)) return value as OutcomeStatus;
+  throw new Error("Outcome status is not valid.");
 }
 
 export function asProfile(value: unknown): Profile {

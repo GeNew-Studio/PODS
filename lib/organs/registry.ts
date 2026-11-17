@@ -1,9 +1,10 @@
 import { heartModule } from "@/lib/organs/heart";
+import { liverModule } from "@/lib/organs/liver";
 import { lungModule } from "@/lib/organs/lung";
 import type { OrganModule } from "@/lib/organs/types";
 import type { OrganId } from "@/lib/types";
 
-const modules: OrganModule[] = [heartModule, lungModule];
+const modules: OrganModule[] = [heartModule, liverModule, lungModule];
 
 export function listOrgans(): OrganModule[] {
   return modules;

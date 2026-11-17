@@ -1,14 +1,17 @@
 // Client-side actions for the static build. Each one returns the page to open next.
 
-import { MEDICINES } from "@/lib/constants";
+import { MEDICINES, pathwayOf } from "@/lib/constants";
+import { findHospital } from "@/lib/hospitals";
 import {
   asAlcohol,
   asBlood,
   asCancer,
   asCluster,
   asDecision,
+  asEthnicity,
   asFunction,
   asOrgan,
+  asOutcome,
   asPerfusion,
   findRecipientConsent,
   getDocument,
@@ -71,30 +74,35 @@ export async function saveDonor(_state: ActionState, formData: FormData): Promis
     const organModule = getOrgan(organ);
     const id = text(formData, "id") || crypto.randomUUID();
     const existing = text(formData, "id") ? await getDonor(id) : null;
+    const hospital = text(formData, "hospital");
+    const knownHospital = findHospital(hospital);
+    const causeChoice = text(formData, "causeOfDeath");
+    const causeOfDeath = causeChoice === "other" ? text(formData, "causeOfDeathOther") : causeChoice;
     const donor: Donor = {
       id,
       organ,
       name: text(formData, "name"),
       sex: text(formData, "sex") === "female" ? "female" : "male",
+      ethnicity: asEthnicity(text(formData, "ethnicity")),
       age: numberIn(formData, "age", "Age", 0, 110),
       heightCm: numberIn(formData, "heightCm", "Height", 80, 230),
       weightKg: numberIn(formData, "weightKg", "Weight", 20, 250),
       bloodType: asBlood(text(formData, "bloodType")),
       hlaAntigens: antigenList(text(formData, "hla")),
       hlaComplete: checked(formData, "hlaComplete"),
-      causeOfDeath: text(formData, "causeOfDeath"),
+      causeOfDeath,
       lymphNodeMetastasis: checked(formData, "lymphNodeMetastasis"),
       medicines: formData.getAll("medicines").map(String).filter((item) => MEDICINES.includes(item)),
       alcohol: asAlcohol(text(formData, "alcohol")),
-      hospital: text(formData, "hospital"),
-      cluster: asCluster(text(formData, "cluster")),
+      hospital,
+      cluster: knownHospital?.cluster ?? asCluster(text(formData, "cluster")),
       coldIschaemicHours: numberIn(formData, "coldIschaemicHours", "Cold ischaemic time", 0, 48),
       warmIschaemicMinutes: numberIn(formData, "warmIschaemicMinutes", "Warm ischaemic time", 0, 300),
       perfusionDevice: asPerfusion(text(formData, "perfusionDevice")),
       expectedOperativeHours: numberIn(formData, "expectedOperativeHours", "Expected operative time", 0, 24),
       brainDead: checked(formData, "brainDead"),
       familyConsent: checked(formData, "familyConsent"),
-      circulatoryDeath: checked(formData, "circulatoryDeath"),
+      circulatoryDeath: text(formData, "pathway") === "DCD",
       hiv: checked(formData, "hiv"),
       cjd: checked(formData, "cjd"),
       uncontrolledSepsis: checked(formData, "uncontrolledSepsis"),
@@ -109,7 +117,7 @@ export async function saveDonor(_state: ActionState, formData: FormData): Promis
     };
     if (!donor.name) return { error: "Name is required." };
     if (!donor.hospital) return { error: "Donor hospital is required." };
-    if (!donor.causeOfDeath) return { error: "Cause of death is required." };
+    if (!donor.causeOfDeath) return { error: "Cause of death is required. Choose one, or choose Other and describe it." };
     await writeDonor(donor);
     return { redirectTo: `/donors/view?id=${donor.id}` };
   } catch (error) {
@@ -127,6 +135,7 @@ export async function saveRecipient(_state: ActionState, formData: FormData): Pr
       organ,
       name: text(formData, "name"),
       sex: text(formData, "sex") === "female" ? "female" : "male",
+      ethnicity: asEthnicity(text(formData, "ethnicity")),
       age: numberIn(formData, "age", "Age", 0, 110),
       heightCm: numberIn(formData, "heightCm", "Height", 80, 230),
       weightKg: numberIn(formData, "weightKg", "Weight", 20, 250),
@@ -141,11 +150,13 @@ export async function saveRecipient(_state: ActionState, formData: FormData): Pr
       kidneyDisease: checked(formData, "kidneyDisease"),
       liverDisease: checked(formData, "liverDisease"),
       functionalStatus: asFunction(text(formData, "functionalStatus")),
-      hospital: text(formData, "hospital") || "Grantham Hospital",
+      hospital: text(formData, "hospital") || organModule.listingCentre,
       cluster: asCluster(text(formData, "cluster")),
       profile: readProfile(formData, organModule.recipientFields),
-      active: checked(formData, "active"),
+      outcome: asOutcome(text(formData, "outcome")),
+      active: false,
     };
+    recipient.active = recipient.outcome === "waiting";
     if (!recipient.name) return { error: "Name is required." };
     if (!recipient.clinicalBackground) return { error: "Clinical background is required." };
     await writeRecipient(recipient);
@@ -177,6 +188,9 @@ export async function runMatch(formData: FormData): Promise<string> {
       }
     }
     ranked.sort((a, b) => {
+      if (a.result.tier !== b.result.tier) return a.result.tier - b.result.tier;
+      if (a.result.bgPriority !== b.result.bgPriority) return a.result.bgPriority - b.result.bgPriority;
+      if (b.result.sortKey !== a.result.sortKey) return b.result.sortKey - a.result.sortKey;
       if (b.result.score !== a.result.score) return b.result.score - a.result.score;
       if (b.result.urgencyPoints !== a.result.urgencyPoints) return b.result.urgencyPoints - a.result.urgencyPoints;
       if (b.result.daysWaiting !== a.result.daysWaiting) return b.result.daysWaiting - a.result.daysWaiting;
@@ -198,6 +212,8 @@ export async function runMatch(formData: FormData): Promise<string> {
     offeredRecipientId: null,
     decisionStatus: null,
     decisionNote: "",
+    offeredAt: null,
+    decidedAt: null,
   };
   await saveMatch(match);
   return `/matches/view?id=${match.id}`;
@@ -213,9 +229,16 @@ export async function saveDecision(formData: FormData): Promise<string> {
   const note = text(formData, "note").slice(0, 500);
   if (match.decisionStatus === "accepted" && match.offeredRecipientId) {
     const previous = await getRecipient(match.offeredRecipientId);
-    if (previous) await writeRecipient({ ...previous, active: true });
+    if (previous) await writeRecipient({ ...previous, outcome: "waiting", active: true });
   }
   const donor = await getDonor(match.donorId);
+  const now = new Date().toISOString();
+  const newOffer = match.offeredRecipientId !== recipientId || !match.offeredAt;
+  if (newOffer || decision === "offered") {
+    if (newOffer || match.decisionStatus !== "offered") match.offeredAt = now;
+    match.decidedAt = null;
+  }
+  if (decision !== "offered") match.decidedAt = now;
   match.offeredRecipientId = recipientId;
   match.decisionStatus = decision;
   match.decisionNote = note;
@@ -226,9 +249,9 @@ export async function saveDecision(formData: FormData): Promise<string> {
   }
   if (decision === "accepted") {
     const recipient = await getRecipient(recipientId);
-    if (recipient) await writeRecipient({ ...recipient, active: false });
+    if (recipient) await writeRecipient({ ...recipient, outcome: "transplanted", active: false });
   }
-  return `/matches/view?id=${id}`;
+  return `/offers/view?id=${id}&sent=${decision}`;
 }
 
 function toRankedRow(recipient: Recipient, result: ScoreResult): RankedRow {
@@ -246,6 +269,8 @@ function toRankedRow(recipient: Recipient, result: ScoreResult): RankedRow {
     steering: result.steering,
     qualityIndex: result.qualityIndex,
     daysWaiting: result.daysWaiting,
+    tierLabel: result.tierLabel,
+    sortBasis: result.sortBasis,
   };
 }
 
@@ -269,6 +294,7 @@ export async function openConsent(formData: FormData): Promise<string> {
     organ: donor.organ,
     hospital: donor.hospital,
     causeOfDeath: donor.causeOfDeath,
+    donationPathway: pathwayOf(donor),
     donorBlood: donor.bloodType,
     recipientId: recipient.id,
     recipientName: recipient.name,

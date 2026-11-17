@@ -1,3 +1,4 @@
+import { pathwayOf } from "@/lib/constants";
 import type { ClinicalDocument, Donor } from "@/lib/types";
 
 const signedSeed: Record<string, { storedName: string; fileName: string }> = {
@@ -5,9 +6,9 @@ const signedSeed: Record<string, { storedName: string; fileName: string }> = {
     storedName: "alex-chan-family-consent-signed.svg",
     fileName: "alex-chan-family-consent-signed.svg",
   },
-  "doc-l-good-cause_of_death": {
-    storedName: "dana-wu-cause-of-death-signed.svg",
-    fileName: "dana-wu-cause-of-death-signed.svg",
+  "doc-v-good-cause_of_death": {
+    storedName: "gordon-lee-cause-of-death-signed.svg",
+    fileName: "gordon-lee-cause-of-death-signed.svg",
   },
 };
 
@@ -22,6 +23,7 @@ export function donorDocuments(donor: Donor, createdAt: string): ClinicalDocumen
     organ: donor.organ,
     hospital: donor.hospital,
     causeOfDeath: donor.causeOfDeath,
+    donationPathway: pathwayOf(donor),
     donorBlood: donor.bloodType,
     recipientId: null,
     recipientName: null,

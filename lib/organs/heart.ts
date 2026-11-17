@@ -41,22 +41,74 @@ export const heartDonorFields: FieldDef[] = [
   { key: "downtime", label: "Downtime or CPR", type: "boolean" },
   { key: "smoker", label: "Smoker", type: "boolean" },
   { key: "diabetes", label: "Diabetes", type: "boolean" },
+  {
+    key: "troponinT",
+    label: "Troponin T (peak)",
+    type: "number",
+    unit: "ng/L",
+    min: 0,
+    step: 1,
+    help: "Heart injury biomarker. Recorded for model training. It does not change the score.",
+  },
+  { key: "ckMb", label: "CK-MB (peak)", type: "number", unit: "ng/mL", min: 0, step: 0.1, help: "Recorded for model training." },
+  { key: "ldh", label: "LDH", type: "number", unit: "U/L", min: 0, step: 1, help: "Ischaemia-reperfusion marker. Recorded for model training." },
+];
+
+export const HEART_DIAGNOSES = [
+  { value: "dcm", label: "Dilated cardiomyopathy" },
+  { value: "icm", label: "Ischaemic cardiomyopathy" },
+  { value: "hcm", label: "Hypertrophic cardiomyopathy" },
+  { value: "rcm", label: "Restrictive cardiomyopathy (including amyloid)" },
+  { value: "chd", label: "Congenital heart disease" },
+  { value: "valvular", label: "Valvular cardiomyopathy" },
+  { value: "myocarditis", label: "Myocarditis" },
+  { value: "regraft", label: "Graft failure (re-transplant)" },
+  { value: "other", label: "Other" },
+];
+
+// NHSBT POL229/13 (effective 17 June 2026), Tables 2 to 5. Category numbers are the NHS codes.
+export const HEART_CATEGORIES = [
+  { value: "SU-11", label: "Super-urgent 11 – adult or small adult on temporary VAD or VA-ECMO" },
+  { value: "SU-12a", label: "Super-urgent 12a – on IABP (Adjudication Panel agreed)" },
+  { value: "SU-12b", label: "Super-urgent 12b – imminent risk, not suitable for long-term VAD (Panel agreed)" },
+  { value: "SU-12c", label: "Super-urgent 12c – paediatric on VA-ECMO (agreed)" },
+  { value: "SU-12d", label: "Super-urgent 12d – adult congenital, single ventricle (Chair agreed)" },
+  {
+    value: "U-21",
+    label: "Urgent 21 – adult inpatient on inotropes or IABP, cardiac index <2.0, with shock, cardiorenal/hepatic, or adverse pulmonary haemodynamics",
+  },
+  { value: "U-22", label: "Urgent 22 – long-term VAD or TAH with complications (Panel agreed)" },
+  { value: "U-23", label: "Urgent 23 – exceptionally sick adult (Panel agreed)" },
+  { value: "U-31", label: "Urgent 31 – adult congenital, refractory arrhythmia" },
+  { value: "U-32", label: "Urgent 32 – adult congenital, no option to escalate therapy" },
+  { value: "U-51", label: "Urgent 51 – paediatric on short-term mechanical support" },
+  { value: "U-52", label: "Urgent 52 – paediatric on mechanical support with device complications" },
+  { value: "U-54", label: "Urgent 54 – paediatric on VA-ECMO" },
+  { value: "U-55", label: "Urgent 55 – paediatric over 15 kg on high-dose inotropes" },
+  { value: "U-56", label: "Urgent 56 – paediatric 15 kg or less, ventilated and on inotropes" },
+  { value: "U-59", label: "Urgent 59 – paediatric, other (agreed)" },
+  { value: "NU", label: "Non-urgent – two or more Table 2 criteria (e.g. NYHA III/IV, peak VO2 <14)" },
 ];
 
 export const heartRecipientFields: FieldDef[] = [
+  { key: "diagnosis", label: "Primary diagnosis", type: "select", options: HEART_DIAGNOSES },
   {
-    key: "optnStatus",
-    label: "OPTN status",
+    key: "nhsCategory",
+    label: "NHS listing scheme and category",
     type: "select",
-    options: [
-      { value: "1", label: "Status 1 — ECMO or non-dischargeable biventricular support" },
-      { value: "2", label: "Status 2 — IABP, total artificial heart, or other high urgency" },
-      { value: "3", label: "Status 3 — dischargeable LVAD window or high-dose inotropes" },
-      { value: "4", label: "Status 4 — stable LVAD or inotropes without monitoring" },
-      { value: "5", label: "Status 5 — combined organ transplant" },
-      { value: "6", label: "Status 6 — other active candidate" },
-    ],
+    options: HEART_CATEGORIES,
+    help: "NHSBT POL229. Super-urgent is offered first, then urgent, then non-urgent.",
   },
+  {
+    key: "minDonorKg",
+    label: "Minimum donor weight",
+    type: "number",
+    unit: "kg",
+    min: 0,
+    step: 1,
+    help: "POL228: centres register the donor size range they will accept. 0 means no limit.",
+  },
+  { key: "maxDonorKg", label: "Maximum donor weight", type: "number", unit: "kg", min: 0, step: 1, help: "0 means no limit." },
   { key: "redoSternotomy", label: "Redo sternotomy expected", type: "boolean" },
   { key: "vadExplant", label: "VAD explant expected", type: "boolean" },
 ];
@@ -69,10 +121,16 @@ export const heartDonorDefaults: Profile = {
   downtime: false,
   smoker: false,
   diabetes: false,
+  troponinT: 0,
+  ckMb: 0,
+  ldh: 0,
 };
 
 export const heartRecipientDefaults: Profile = {
-  optnStatus: "6",
+  diagnosis: "dcm",
+  nhsCategory: "NU",
+  minDonorKg: 0,
+  maxDonorKg: 0,
   redoSternotomy: false,
   vadExplant: false,
 };
@@ -87,13 +145,30 @@ type HeartDonorProfile = {
   diabetes: boolean;
 };
 
+export type HeartScheme = "SU" | "U" | "NU";
+
 type HeartRecipientProfile = {
-  optnStatus: number;
+  category: string;
+  scheme: HeartScheme;
+  minDonorKg: number;
+  maxDonorKg: number;
   redoSternotomy: boolean;
   vadExplant: boolean;
 };
 
-const OPTN_POINTS: Record<number, number> = { 1: 28, 2: 24, 3: 16, 4: 10, 5: 14, 6: 4 };
+const SCHEME_LABEL: Record<HeartScheme, string> = { SU: "Super-urgent", U: "Urgent", NU: "Non-urgent" };
+// Display points only. The offer order comes from the NHS tier, not from these points.
+const SCHEME_POINTS: Record<HeartScheme, number> = { SU: 28, U: 20, NU: 8 };
+
+// NHSBT POL228/POL229 patient categories: adult is 16 or over, paediatric under 16,
+// small adult is 16 or over and 30 kg or less.
+export type HeartPatientCategory = "adult" | "small_adult" | "paediatric";
+
+export function heartPatientCategory(recipient: Recipient): HeartPatientCategory {
+  if (recipient.age < 16) return "paediatric";
+  if (recipient.weightKg <= 30) return "small_adult";
+  return "adult";
+}
 
 export function readHeartDonor(profile: Profile): HeartDonorProfile {
   const coronary = profile.coronary;
@@ -109,12 +184,44 @@ export function readHeartDonor(profile: Profile): HeartDonorProfile {
 }
 
 export function readHeartRecipient(profile: Profile): HeartRecipientProfile {
-  const status = clamp(Math.round(num(profile.optnStatus, 6)), 1, 6);
+  let category = String(profile.nhsCategory ?? "");
+  if (!HEART_CATEGORIES.some((item) => item.value === category)) {
+    // Records saved before the NHS categories used US OPTN status 1 to 6.
+    const status = num(profile.optnStatus, 6);
+    category = status <= 1 ? "SU-11" : status <= 3 ? "U-21" : "NU";
+  }
+  const scheme: HeartScheme = category.startsWith("SU") ? "SU" : category.startsWith("U") ? "U" : "NU";
   return {
-    optnStatus: status,
+    category,
+    scheme,
+    minDonorKg: num(profile.minDonorKg),
+    maxDonorKg: num(profile.maxDonorKg),
     redoSternotomy: flag(profile.redoSternotomy),
     vadExplant: flag(profile.vadExplant),
   };
+}
+
+function categoryCode(profile: HeartRecipientProfile): string {
+  return profile.scheme === "NU" ? "Non-urgent" : `${SCHEME_LABEL[profile.scheme]} cat ${profile.category.split("-")[1]}`;
+}
+
+// POL228 Figures 1 and 3 (DBD donors). Returns the tier number and its label.
+function heartTier(donor: Donor, recipient: Recipient, scheme: HeartScheme): { tier: number; label: string } {
+  const paediatricDonor = donor.age < 16;
+  const group = heartPatientCategory(recipient) === "adult" ? "adult" : "paediatric";
+  const groupLabel = group === "adult" ? "Adult" : "Paediatric / small adult";
+  if (!paediatricDonor) {
+    if (scheme === "SU" && group === "adult") return { tier: 1, label: "1 · Super-urgent adult" };
+    if (scheme === "U" && group === "adult") return { tier: 2, label: "2 · Urgent adult" };
+    if (scheme === "SU") return { tier: 3, label: "3 · Super-urgent paediatric / small adult" };
+    if (scheme === "U") return { tier: 4, label: "4 · Urgent paediatric / small adult" };
+    return { tier: 5, label: "5 · Non-urgent (centre choice)" };
+  }
+  if (scheme === "SU" && group === "paediatric") return { tier: 1, label: "1 · Super-urgent paediatric / small adult" };
+  if (scheme === "U" && group === "paediatric") return { tier: 2, label: "2 · Urgent paediatric / small adult" };
+  if (scheme === "SU") return { tier: 3, label: "3 · Super-urgent adult" };
+  if (scheme === "U") return { tier: 4, label: "4 · Urgent adult" };
+  return { tier: group === "paediatric" ? 5 : 6, label: `${group === "paediatric" ? 5 : 6} · Non-urgent ${groupLabel.toLowerCase()} (centre choice)` };
 }
 
 function deduct(lines: QualityReport["lines"], label: string, detail: string, amount: number) {
@@ -248,18 +355,19 @@ export function evaluateHeart(donor: Donor, recipient: Recipient): ScoreResult {
   const recipientMass = predictedHeartMass(recipient.sex, recipient.age, recipient.heightCm, recipient.weightKg);
   const sizeRatio = Math.round(ratio(donorMass, recipientMass) * 100) / 100;
   const reasons = sharedPairGates(donor, recipient);
-  if (sizeRatio < 0.6 || sizeRatio > 1.4) {
-    reasons.push(
-      `Predicted heart mass ratio is ${sizeRatio.toFixed(2)}, outside 0.60–1.40.`,
-    );
+  if (recipientProfile.minDonorKg > 0 && donor.weightKg < recipientProfile.minDonorKg) {
+    reasons.push(`Donor weight ${donor.weightKg} kg is below the ${recipientProfile.minDonorKg} kg minimum the centre registered (POL228).`);
   }
-  if (reasons.length > 0) return blockedResult(reasons, `OPTN status ${recipientProfile.optnStatus}`);
+  if (recipientProfile.maxDonorKg > 0 && donor.weightKg > recipientProfile.maxDonorKg) {
+    reasons.push(`Donor weight ${donor.weightKg} kg is above the ${recipientProfile.maxDonorKg} kg maximum the centre registered (POL228).`);
+  }
+  if (reasons.length > 0) return blockedResult(reasons, categoryCode(recipientProfile));
 
   const identical = aboIdentical(donor.bloodType, recipient.bloodType);
   const crossmatch = virtualCrossmatch(donor, recipient);
   const crossmatchPoints = crossmatch === "uncertain" ? 4 : recipient.cpra >= 80 ? 15 : 10;
   let sizePoints = 3;
-  let sizeRule = "Ratio inside 0.60–1.40 but outside 0.70–1.30 scores 3.";
+  let sizeRule = "Ratio outside 0.70–1.30 scores 3. POL228 9.2 asks centres to weigh size; the ratio bands are a PODS choice.";
   if (sizeRatio >= 0.8 && sizeRatio <= 1.2) {
     sizePoints = 12;
     sizeRule = "Ratio 0.80–1.20 scores 12.";
@@ -268,7 +376,16 @@ export function evaluateHeart(donor: Donor, recipient: Recipient): ScoreResult {
     sizeRule = "Ratio 0.70–1.30 scores 7.";
   }
 
-  const urgency = OPTN_POINTS[recipientProfile.optnStatus] ?? 4;
+  const urgency = SCHEME_POINTS[recipientProfile.scheme];
+  const tier = heartTier(donor, recipient, recipientProfile.scheme);
+  // POL228 5.3 and 7.1: for an O donor, urgent adult O and B patients are offered before A and AB.
+  const bgPriority =
+    donor.bloodType === "O" && recipientProfile.scheme === "U" && heartPatientCategory(recipient) === "adult"
+      ? recipient.bloodType === "O" || recipient.bloodType === "B"
+        ? 0
+        : 1
+      : 0;
+  const byWaiting = recipientProfile.scheme !== "NU";
   const survival = projectedSurvival(recipient);
   const quality = heartQuality(donor);
   let survivalPoints = survival.points;
@@ -284,17 +401,15 @@ export function evaluateHeart(donor: Donor, recipient: Recipient): ScoreResult {
     survivalPoints = capped;
   } else if (quality.value >= 70) {
     steeringRule = "High-quality organ and longer expected outlook: full survival points kept.";
-  } else if (quality.value < 50 && recipientProfile.optnStatus >= 4) {
+  } else if (quality.value < 50 && recipientProfile.scheme === "NU") {
     const capped = Math.min(survivalPoints, 4);
     if (capped < survivalPoints) {
       steering = "Marginal heart: survival points were capped so the organ is steered toward an urgent patient.";
     }
-    steeringRule = "Marginal organ and OPTN status 4, 5, or 6: cap projected survival at 4.";
+    steeringRule = "Marginal organ and non-urgent patient: cap projected survival at 4.";
     survivalPoints = capped;
-  } else if (quality.value < 50 && recipientProfile.optnStatus <= 2) {
-    steeringRule = "Marginal organ and OPTN status 1 or 2: no survival cap.";
   } else if (quality.value < 50) {
-    steeringRule = "Marginal organ and OPTN status 3: no survival cap.";
+    steeringRule = "Marginal organ and super-urgent or urgent patient: no survival cap.";
   }
 
   const complex = recipientProfile.redoSternotomy || recipientProfile.vadExplant;
@@ -346,10 +461,10 @@ export function evaluateHeart(donor: Donor, recipient: Recipient): ScoreResult {
     factor(
       "survival",
       "urgency",
-      "OPTN status",
+      "NHS urgency scheme",
       "Heart donor",
-      `Status ${recipientProfile.optnStatus}`,
-      "Status 1 = 28, 2 = 24, 3 = 16, 4 = 10, 5 = 14, 6 = 4.",
+      categoryCode(recipientProfile),
+      "NHSBT POL228: the scheme sets the offer order (super-urgent, then urgent, then non-urgent). Points shown here (28 / 20 / 8) only rank patients inside the non-urgent centre choice.",
       urgency,
       28,
     ),
@@ -416,7 +531,12 @@ export function evaluateHeart(donor: Donor, recipient: Recipient): ScoreResult {
     daysWaiting: recipient.daysWaiting,
     clusterRank: clusterRank(recipient.cluster),
     qualityIndex: quality.value,
-    urgencyLabel: `OPTN status ${recipientProfile.optnStatus}`,
+    urgencyLabel: categoryCode(recipientProfile),
+    tier: tier.tier,
+    tierLabel: tier.label,
+    bgPriority,
+    sortKey: byWaiting ? recipient.daysWaiting : totals.score,
+    sortBasis: byWaiting ? "waiting" : "score",
   };
 }
 
@@ -448,14 +568,37 @@ export const heartModule: OrganModule = {
       { label: "Downtime or CPR", value: profile.downtime ? "Yes" : "No" },
       { label: "Smoker", value: profile.smoker ? "Yes" : "No" },
       { label: "Diabetes", value: profile.diabetes ? "Yes" : "No" },
+      { label: "Troponin T", value: donor.profile.troponinT ? `${donor.profile.troponinT} ng/L` : "Not recorded" },
+      { label: "CK-MB", value: donor.profile.ckMb ? `${donor.profile.ckMb} ng/mL` : "Not recorded" },
+      { label: "LDH", value: donor.profile.ldh ? `${donor.profile.ldh} U/L` : "Not recorded" },
     ];
   },
   summariseRecipient(recipient) {
     const profile = readHeartRecipient(recipient.profile);
     return [
-      { label: "OPTN status", value: String(profile.optnStatus) },
+      { label: "NHS scheme", value: HEART_CATEGORIES.find((item) => item.value === profile.category)?.label ?? profile.category },
+      { label: "Patient category", value: heartPatientCategory(recipient).replace("_", " ") },
+      {
+        label: "Donor weight range",
+        value:
+          profile.minDonorKg || profile.maxDonorKg
+            ? `${profile.minDonorKg || "any"} to ${profile.maxDonorKg || "any"} kg`
+            : "No limit registered",
+      },
       { label: "Redo sternotomy", value: profile.redoSternotomy ? "Yes" : "No" },
       { label: "VAD explant", value: profile.vadExplant ? "Yes" : "No" },
+      { label: "Primary diagnosis", value: heartDiagnosis(recipient) },
     ];
   },
+  urgency(recipient) {
+    return categoryCode(readHeartRecipient(recipient.profile));
+  },
+  diagnosis: heartDiagnosis,
+  listingCentre: "Grantham Hospital",
+  implantSite: IMPLANT_HOSPITAL,
 };
+
+function heartDiagnosis(recipient: Recipient): string {
+  const value = String(recipient.profile.diagnosis ?? "");
+  return HEART_DIAGNOSES.find((item) => item.value === value)?.label ?? "Not recorded";
+}

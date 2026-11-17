@@ -18,7 +18,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <Link href="/">
           <p className="text-lg font-semibold tracking-[0.18em]">PODS</p>
-          <p className="text-xs text-[#d5efed]">Local organ matching</p>
+          <p className="text-xs text-[#d5efed]">Platform for Organ Donation Systems</p>
         </Link>
         <nav className="flex flex-wrap gap-1 text-sm">
           {links.map((link) => {
